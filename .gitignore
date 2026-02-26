@@ -1,0 +1,23 @@
+# --- Eclipse files ---
+.classpath
+.project
+.settings/
+
+# --- Build folders ---
+bin/
+target/
+out/
+
+# --- Compiled bytecode ---
+*.class
+
+# --- Logs, temp files ---
+*.log
+*.tmp
+
+# --- System files ---
+.DS_Store        # macOS
+Thumbs.db        # Windows
+
+# --- IDE specific ---
+.metadata/
