@@ -5,22 +5,27 @@
  *   UC 01: Registration
  *   UC 02: Authentication + Dummy Contacts
  *   UC 03: Profile Management (view, update name, change password)
+ *   UC 04: Contact Management (hierarchy-Person/Organization)
  *
  * Flow:
  *   1) Register → validates, hashes, stores user
  *   2) Login → authenticates against stored users
- *   3) After login → shows dummy contacts + profile menu
+ *   3) After login → shows dummy contacts + contact menu + profile menu
  *
  *  @author Developer
- *  @version 3.0
+ *  @version 4.0
  */
 package com.app;
 
-import java.util.List;
-import java.util.Scanner;
+import java.util.*;
+
+// UC-04
+import com.contacts.PhoneNumber;
+import com.contacts.PersonContact;
+import com.contacts.OrganizationContact;
 
 // UC-03
-import com.profile.ProfileService;  
+import com.profile.ProfileService;
 
 // UC-02 (Authentication + store + contacts)
 import com.auth.Authentication;
@@ -28,7 +33,7 @@ import com.auth.BasicAuth;
 import com.auth.AuthException;
 import com.auth.UserDatabase;
 
-import com.contacts.Contacts;        
+import com.contacts.Contacts;
 import com.contacts.ContactService;
 
 import com.UserManagement.Email;
@@ -144,6 +149,9 @@ public class App {
                 // UC 02: show dummy contact list
                 showContacts();
 
+                // UC-04: hierarchy contact management
+                showContactMenu(sc, currentUser);
+
                 // UC 03: open the profile menu for the logged-in user
                 showProfileMenu(sc, currentUser);
             }
@@ -158,11 +166,14 @@ public class App {
 
         System.out.println("\nYour Contact List:");
         for (Contacts c : contacts) {
-            System.out.println(c.getName() + " - " + c.getPhone());
+            String phones = c.getPhones().isEmpty()
+                    ? "-"
+                    : c.getPhones().stream().map(PhoneNumber::getValue).reduce((a, b) -> a + ", " + b).orElse("-");
+            System.out.println(c.getName() + " - " + phones);
         }
     }
 
-    // UC 03:Profile menu 
+    // UC 03: Profile menu
     private static void showProfileMenu(Scanner sc, User user) {
         ProfileService ps = new ProfileService();
 
@@ -207,5 +218,124 @@ public class App {
                 System.out.println("Error: " + e.getMessage());
             }
         }
+    }
+
+    // UC-04: Contact Management menu
+    private static void showContactMenu(Scanner sc, User currentUser) {
+        ContactService service = new ContactService();
+
+        while (true) {
+            System.out.println("\nUC 04: Contact Management");
+            System.out.println("1) Create Person Contact");
+            System.out.println("2) Create Organization Contact");
+            System.out.println("3) List My Contacts");
+            System.out.println("4) Back");
+            System.out.print("Choose: ");
+            String choice = sc.nextLine().trim();
+
+            switch (choice) {
+                case "1":
+                    createPersonContactFlow(sc, currentUser, service);
+                    break;
+                case "2":
+                    createOrgContactFlow(sc, currentUser, service);
+                    break;
+                case "3":
+                    listContactsFlow(currentUser, service);
+                    break;
+                case "4":
+                    return;
+                default:
+                    System.out.println("Invalid choice.");
+            }
+        }
+    }
+
+    private static void createPersonContactFlow(Scanner sc, User owner, ContactService service) {
+        try {
+            System.out.print("First name (required): ");
+            String first = sc.nextLine().trim();
+            System.out.print("Last name (optional): ");
+            String last = sc.nextLine().trim();
+
+            List<PhoneNumber> phones = readPhones(sc);
+            List<com.UserManagement.Email> emails = readEmails(sc);
+
+            System.out.print("Notes (optional): ");
+            String notes = sc.nextLine();
+
+            Contacts c = new PersonContact(first, last, phones, emails, notes);
+            service.addContact(owner, c);
+            System.out.println("Person contact created:" + c.getName() + " (ID:" + c.getId() + ")");
+        } catch (Exception e) {
+            System.out.println("Failed to create person contact: " + e.getMessage());
+        }
+    }
+
+    private static void createOrgContactFlow(Scanner sc, User owner, ContactService service) {
+        try {
+            System.out.print("Company name (required): ");
+            String company = sc.nextLine().trim();
+
+            List<PhoneNumber> phones = readPhones(sc);
+            List<com.UserManagement.Email> emails = readEmails(sc);
+
+            System.out.print("Notes (optional): ");
+            String notes = sc.nextLine();
+
+            Contacts c = new OrganizationContact(company, phones, emails, notes);
+            service.addContact(owner, c);
+            System.out.println("Organization contact created: " + c.getName() + " (ID: " + c.getId() + ")");
+        } catch (Exception e) {
+            System.out.println("Failed to create organization contact: " + e.getMessage());
+        }
+    }
+
+    private static void listContactsFlow(User owner, ContactService service) {
+        List<Contacts> list = service.listContacts(owner);
+        if (list.isEmpty()) {
+            System.out.println("No contacts found.");
+            return;
+        }
+        System.out.println("\nYour Contacts:");
+        for (Contacts c : list) {
+            String phones = c.getPhones().isEmpty()
+                    ? "-"
+                    : c.getPhones().stream().map(PhoneNumber::getValue).reduce((a, b) -> a + ", " + b).orElse("-");
+            String emails = c.getEmails().isEmpty()
+                    ? "-"
+                    : c.getEmails().stream().map(com.UserManagement.Email::getValue).reduce((a, b) -> a + ", " + b).orElse("-");
+            String type = c.getClass().getSimpleName();
+            System.out.println("- [" + type + "] " + c.getName()
+                    + " | Phones: " + phones
+                    + " | Emails: " + emails
+                    + " | Created: " + c.getCreatedAt());
+        }
+    }
+
+    private static java.util.List<PhoneNumber> readPhones(Scanner sc) {
+        System.out.print("Phone numbers (comma separated, optional): ");
+        String raw = sc.nextLine();
+        java.util.List<PhoneNumber> out = new java.util.ArrayList<>();
+        if (raw != null && !raw.trim().isEmpty()) {
+            for (String p : raw.split(",")) {
+                String v = p.trim();
+                if (!v.isEmpty()) out.add(new PhoneNumber(v)); // validates
+            }
+        }
+        return out;
+    }
+
+    private static java.util.List<com.UserManagement.Email> readEmails(Scanner sc) {
+        System.out.print("Emails (optional): ");
+        String raw = sc.nextLine();
+        java.util.List<com.UserManagement.Email> out = new java.util.ArrayList<>();
+        if (raw != null && !raw.trim().isEmpty()) {
+            for (String e : raw.split(",")) {
+                String v = e.trim();
+                if (!v.isEmpty()) out.add(new com.UserManagement.Email(v));
+            }
+        }
+        return out;
     }
 }
